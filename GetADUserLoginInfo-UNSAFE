@@ -1,0 +1,78 @@
+#定义机型
+$ChassisTypes =
+@{
+    1='Other'
+    2='Unknown'
+    3='Desktop'
+    4='Low Profile Desktop'
+    5='Pizza Box'
+    6='Mini Tower'
+    7='Tower'
+    8='Portable'
+    9='Laptop'
+    10='Notebook'
+    11='Hand Held'
+    12='Docking Station'
+    13='All in One'
+    14='Sub Notebook'
+    15='Space-Saving'
+    16='Lunch Box'
+    17='Main System Chassis'
+    18='Expansion Chassis'
+    19='SubChassis'
+    20='Bus Expansion Chassis'
+    21='Peripheral Chassis'
+    22='Storage Chassis'
+    23='Rack Mount Chassis'
+    24='Sealed-Case PC'
+    25='Multi-system chassis'
+    26='Compact PCI'
+    27='Advanced TCA'
+    28='Blade'
+    29='Blade Enclosure'
+    30='Tablet'
+    31='Convertible'
+    32='Detachable'
+    33='IoT Gateway'
+    34='Embedded PC'
+    35='Mini PC'
+    36='Stick PC'
+}
+$OutputFile = "share folder"\ComputerInfo.csv"
+$namespace = "root\CIMV2"
+#$obj = @{} 
+$obj = New-Object -Type PSObject | Select-Object Username,Hostname,SystemIP,SerialNumber,SystemMAC,Chassis,ChassisTypes, Manufacturer,BaseBoardProduct, SystemFamily,Officescan,Forcepoint,UniAgent,LenovoBox,LocalAdmins,CollectDate,InstallDate,Uptime
+#用户名
+$obj.Username =  $env:username
+#主机名
+$obj.Hostname = Get-WmiObject Win32_ComputerSystem | Select-Object -ExpandProperty Name
+#IP
+$obj.SystemIP = Get-WmiObject win32_networkadapterconfiguration | Select-Object -Property @{name='IPAddress';Expression={($_.IPAddress[0])}},MacAddress | where IPAddress -NE $null | where IPAddress -NotLike "169.254*" |Select-Object -ExpandProperty  IPAddress
+#MAC
+$obj.SystemMAC= Get-WmiObject win32_networkadapterconfiguration | Select-Object -Property @{name='IPAddress';Expression={($_.IPAddress[0])}},MacAddress | where IPAddress -NE $null | where IPAddress -NotLike "169.254*" |select  -ExpandProperty MacAddress
+#序列号
+$obj.SerialNumber = Get-WmiObject -class Win32_Bios  -namespace $namespace | Select-Object -ExpandProperty SerialNumber
+#生产商
+$obj.Manufacturer = Get-WmiObject -class Win32_Bios  -namespace $namespace | Select-Object -ExpandProperty Manufacturer
+$obj.BaseBoardProduct = Get-WmiObject Win32_BaseBoard | Select-Object -ExpandProperty Product
+$obj.ChassisTypes = Get-WmiObject Win32_SystemEnclosure | Select-Object -ExpandProperty ChassisTypes
+$obj.Chassis = $ChassisTypes[[int]$obj.ChassisTypes]
+$obj.SystemFamily = Get-WmiObject Win32_ComputerSystem | Select-Object -ExpandProperty SystemFamily
+#杀毒
+$obj.officescan= Test-Path "C:\Program Files (x86)\Asiainfo Security\OfficeScan Client\PccNTMon.exe"
+#DLP
+$obj.forcepoint= Test-Path "C:\Program Files\Websense\Websense Endpoint\wepsvc.exe"
+#联软
+$obj.UniAgent= Test-Path "C:\Windows\LVUAAgentInstBaseRoot\UniAccessAgent.exe"
+#网盘
+$obj.LenovoBox=Test-Path "C:\Program Files\Lenovo\LenovoData3_private\lenovodata3.exe"
+#本地管理员,排除一下预设admins
+$obj.LocalAdmins= Get-LocalGroupMember -Group administrators | Where-Object { ($_.name -ne "HRYT\Domain Admins")  -and ($_.name -ne "HRYT\Group_LocalAdmins")   } | Select-Object  -ExpandProperty name 
+#收集日期
+$obj.CollectDate = get-date -Format s
+$obj.InstallDate =  (Get-CimInstance Win32_OperatingSystem | Select-Object -ExpandProperty InstallDate).ToString("yyyy-MM-dd")
+#收集开机时间
+$os = Get-WmiObject win32_operatingsystem
+$uptime = (Get-Date) - ($os.ConvertToDateTime($os.lastbootuptime))
+$obj.Uptime="Up " + $Uptime.Days + " Days " + $Uptime.Hours + " Hours " + $Uptime.Minutes + " Minutes"
+Out-File -FilePath $OutputFile -InputObject "$($obj.CollectDate),$($obj.Username),$($obj.Hostname),$($obj.SystemIP),$($obj.SystemMAC),$($obj.SerialNumber),$($obj.Manufacturer),$($obj.Chassis),$($obj.SystemFamily),$($obj.Officescan),$($obj.Forcepoint),$($obj.UniAgent),$($obj.LenovoBox),$($obj.LocalAdmins),$($obj.InstallDate),$($obj.Uptime)" -Encoding UTF8 -append
